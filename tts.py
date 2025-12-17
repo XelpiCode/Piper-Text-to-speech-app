@@ -3,18 +3,28 @@ import tempfile
 import os
 from pathlib import Path
 
+import sounddevice as sd
+from scipy.io import wavfile
+
 VOICE = "voices/en_US-hfc_female-medium.onnx"
 MP3_DIR = Path("mp3")
+
 
 def next_mp3_name() -> Path:
     MP3_DIR.mkdir(exist_ok=True)
 
-    existing = sorted(MP3_DIR.glob("*.mp3"))
-    if not existing:
+    files = sorted(MP3_DIR.glob("*.mp3"))
+    if not files:
         return MP3_DIR / "0001.mp3"
 
-    last = int(existing[-1].stem)
+    last = int(files[-1].stem)
     return MP3_DIR / f"{last + 1:04d}.mp3"
+
+
+def play_wav(wav_path: str):
+    rate, data = wavfile.read(wav_path)
+    sd.play(data, rate)
+    sd.wait()
 
 
 def speak(text: str):
@@ -24,7 +34,7 @@ def speak(text: str):
         wav_path = tmp.name
 
     try:
-        # 1️⃣ Generate WAV using Piper
+        # 1️⃣ Text → WAV
         subprocess.run(
             ["piper", "--model", VOICE, "--output_file", wav_path],
             input=text,
@@ -32,7 +42,10 @@ def speak(text: str):
             check=True
         )
 
-        # 2️⃣ Convert WAV → MP3 using ffmpeg
+        # 2️⃣ Play audio
+        play_wav(wav_path)
+
+        # 3️⃣ WAV → MP3
         subprocess.run(
             [
                 "ffmpeg", "-y",
@@ -46,6 +59,6 @@ def speak(text: str):
         print(f"Saved: {mp3_path}")
 
     finally:
-        # 3️⃣ Always delete WAV
+        # 4️⃣ Cleanup WAV
         if os.path.exists(wav_path):
             os.remove(wav_path)
